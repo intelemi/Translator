@@ -1,0 +1,3 @@
+*.env
+__pycache__/
+/intelemi_translator_env
