@@ -26,3 +26,8 @@ source .\intelemi_translator_env\Scripts\activate
 pip install -r requirements.txt
 ```
 
+### Ejecute webapp
+
+```python
+python main.py
+```
