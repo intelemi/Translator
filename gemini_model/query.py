@@ -82,11 +82,11 @@ Query del usuario:"""
             return f"Error en la clasificación: {str(e)}"
 
 # Ejemplo de uso:
+if __name__ == "__main__":
+    # Asumiendo que tienes tus prompts definidos en prompts_dict
+    classifier = QueryClassifier(PROMPTS)
 
-# Asumiendo que tienes tus prompts definidos en prompts_dict
-classifier = QueryClassifier(PROMPTS)
-
-# Ejemplo con una nueva sesión
-query = "Quiero traducir la frase, mi familia es el poder que guia mi vida"
-result = classifier.classify_query(query, new_session=True)
-print(f"Query: {query}\nClasificación: {result}")
+    # Ejemplo con una nueva sesión
+    query = "Quiero traducir la frase, mi familia es el poder que guia mi vida"
+    result = classifier.classify_query(query, new_session=True)
+    print(f"Query: {query}\nClasificación: {result}")
