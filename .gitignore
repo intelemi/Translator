@@ -1,3 +1,5 @@
 *.env
-\gemini_model\__pycache__
+/__pycache__
 /intelemi_translator_env
+*/.gradio
+*/__pycache__
