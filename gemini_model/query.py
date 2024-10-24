@@ -62,7 +62,7 @@ Query del usuario:"""
         if initial_query:
             history = [
                 {
-                    "role": "user",
+                    "role": "model",
                     "parts": [initial_query],
                 }
             ]
@@ -77,6 +77,7 @@ Query del usuario:"""
         
         try:
             response = self.chat_session.send_message(query)
+            print(f"Prompt seleccionado :{response.text} ")
             return response.text.strip()
         except Exception as e:
             return f"Error en la clasificación: {str(e)}"
@@ -87,6 +88,6 @@ if __name__ == "__main__":
     classifier = QueryClassifier(PROMPTS)
 
     # Ejemplo con una nueva sesión
-    query = "Quiero traducir la frase, mi familia es el poder que guia mi vida"
+    query = "Quiero traducir la frase, mi familia es el poder que guia mi vida y frases similares en tsafiqui"
     result = classifier.classify_query(query, new_session=True)
     print(f"Query: {query}\nClasificación: {result}")
