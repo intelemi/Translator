@@ -1,9 +1,14 @@
+import os
 import time
-import google.generativeai as genai
-from google.generativeai import caching
 from prompts import prompts
 from dotenv import load_dotenv
-import os
+import google.generativeai as genai
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+from typing import Optional, Dict, Any
+from google.generativeai import caching
+from cache import CacheMetadata,PromptCacheManager
+
 
 load_dotenv()
 
@@ -12,6 +17,8 @@ MODEL_NAME = os.getenv("MODEL_NAME")
 
 
 genai.configure(api_key=GEMINI_API_KEY)
+
+
 
 class MediaHandler:
     """Clase auxiliar para manejar la carga y procesamiento de archivos multimedia"""
@@ -64,6 +71,7 @@ class GeminiInteract:
                  top_k=40, 
                  max_output_tokens=8192):
         self.__model = MODEL_NAME
+        self.__prompt_key = prompt_key 
         self.__prompt_config = prompts[prompt_key]  # Acceso directo al diccionario de prompts
         self.__generation_config = {
             "temperature": temperature,
@@ -75,28 +83,61 @@ class GeminiInteract:
         self.chat_session = None
         self.media_handler = MediaHandler()
         self.uploaded_files = []
+        self.cache_manager = PromptCacheManager(MODEL_NAME)
+        
+    def _initialize_model_with_cache(self):
+        """Inicializa el modelo con caché del system prompt"""
+        system_cache_id = self.cache_manager.get_or_create_cache(
+            self.__prompt_config, 'system', self.__prompt_key
+        )
+
+        if system_cache_id:
+            try:
+                print("Initializing model with cached system prompt...")
+                system_cache = caching.CachedContent.get(system_cache_id)
+                return genai.GenerativeModel.from_cached_content(
+                    cached_content=system_cache,
+                    generation_config=self.__generation_config
+                )
+            except Exception as e:
+                print(f"Cache initialization error: {e}")
+
+        print("Using standard model initialization...")
+        return genai.GenerativeModel(
+            model_name=self.__model,
+            generation_config=self.__generation_config,
+            system_instruction=self.__prompt_config['system']
+        )
+
 
     def start_chat(self):
         if not self.chat_session:
-            print(f"\nInitializing chat with:")
-            print(f"System prompt: {self.__prompt_config['system'][:100]}...")
-            if self.__prompt_config.get('assistant'):
-                print(f"Assistant prompt: {self.__prompt_config['assistant'][:100]}...")
-            
-            model = genai.GenerativeModel(
-                model_name=self.__model,
-                generation_config=self.__generation_config,
-                system_instruction=self.__prompt_config['system']
-            )
+            print("\nInitializing chat session...")
+            model = self._initialize_model_with_cache()
 
             initial_history = []
             if self.__prompt_config.get('assistant'):
-                initial_history = [
-                    {
-                        "role": "model",
-                        "parts": [str(self.__prompt_config['assistant'])]
-                    }
-                ]
+                # Intentar obtener caché del assistant
+                assistant_cache_id = self.cache_manager.get_or_create_cache(
+                    self.__prompt_config, 'assistant', self.__prompt_key
+                )
+                
+                if assistant_cache_id:
+                    print("Using cached assistant content...")
+                    initial_history = [
+                        {
+                            "role": "model",
+                            "parts": [str(self.__prompt_config['assistant'])]
+                        }
+                    ]
+                else:
+                    print("Using standard assistant content...")
+                    initial_history = [
+                        {
+                            "role": "model",
+                            "parts": [str(self.__prompt_config['assistant'])]
+                        }
+                    ]
 
             self.chat_session = model.start_chat(history=initial_history)
             print("Chat session initialized successfully")
