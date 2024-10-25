@@ -1,38 +1,10 @@
 from dataclasses import dataclass
+import json
+from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
+import google.generativeai as genai
 from google.generativeai import caching
-
-
-import json
-import os
-from pathlib import Path
-
-class CacheStorage:
-    """Maneja el almacenamiento persistente de metadatos de caché"""
-    def __init__(self, storage_path="cache_metadata.json"):
-        self.storage_path = Path(storage_path)
-        self.cache_data = self._load_cache_data()
-
-    def _load_cache_data(self):
-        if self.storage_path.exists():
-            try:
-                with open(self.storage_path, 'r') as f:
-                    return json.load(f)
-            except:
-                return {}
-        return {}
-
-    def save_cache_metadata(self, prompt_key: str, cache_type: str, metadata: dict):
-        if prompt_key not in self.cache_data:
-            self.cache_data[prompt_key] = {}
-        self.cache_data[prompt_key][cache_type] = metadata
-        
-        with open(self.storage_path, 'w') as f:
-            json.dump(self.cache_data, f, indent=2)
-
-    def get_cache_metadata(self, prompt_key: str, cache_type: str) -> Optional[dict]:
-        return self.cache_data.get(prompt_key, {}).get(cache_type)
 
 @dataclass
 class CacheMetadata:
@@ -41,37 +13,81 @@ class CacheMetadata:
     duration_hours: int = 5
     token_count: Optional[int] = None
 
-    @property
-    def is_valid(self) -> bool:
-        if not all([self.cache_id, self.created_at]):
+class CacheRegistry:
+    """Maneja el registro persistente de cachés"""
+    def __init__(self, registry_path="cache_registry.json"):
+        self.registry_path = Path(registry_path)
+        self.registry = self._load_registry()
+
+    def _load_registry(self) -> dict:
+        if self.registry_path.exists():
+            try:
+                with open(self.registry_path, 'r') as f:
+                    return json.load(f)
+            except Exception as e:
+                print(f"Error loading cache registry: {e}")
+                return {}
+        return {}
+
+    def save_cache_info(self, prompt_key: str, cache_type: str, cache_info: dict):
+        if prompt_key not in self.registry:
+            self.registry[prompt_key] = {}
+        
+        self.registry[prompt_key][cache_type] = cache_info
+        
+        try:
+            with open(self.registry_path, 'w') as f:
+                json.dump(self.registry, f, indent=2)
+            print(f"Cache info saved for {prompt_key}/{cache_type}")
+        except Exception as e:
+            print(f"Error saving cache registry: {e}")
+
+    def get_cache_info(self, prompt_key: str, cache_type: str) -> Optional[dict]:
+        return self.registry.get(prompt_key, {}).get(cache_type)
+
+    def is_cache_valid(self, prompt_key: str, cache_type: str) -> bool:
+        cache_info = self.get_cache_info(prompt_key, cache_type)
+        if not cache_info:
             return False
-        return datetime.now() < self.created_at + timedelta(hours=self.duration_hours)
+
+        try:
+            created_at = datetime.fromisoformat(cache_info['created_at'])
+            duration_hours = cache_info['duration']
+            return datetime.now() < created_at + timedelta(hours=duration_hours)
+        except:
+            return False
 
 class PromptCacheManager:
     def __init__(self, model_name: str):
         self.model_name = model_name
         self._cache_threshold = 32768
-        self.cache_storage = CacheStorage()
+        self.cache_registry = CacheRegistry()
 
     def _count_tokens(self, content: str) -> int:
         """Estima el conteo de tokens en el contenido"""
-        # Estimación aproximada: 1 token ≈ 4 caracteres
-        return len(str(content)) // 4
+        try:
+            # Si el contenido es un diccionario o lista, convertirlo a string
+            if isinstance(content, (dict, list)):
+                content = str(content)
+            # Estimación aproximada: 1 token ≈ 4 caracteres
+            return len(content) // 4
+        except Exception as e:
+            print(f"Error counting tokens: {e}")
+            return 0
 
     def _verify_cache_creation(self, cache_id: str) -> bool:
-        """Verifica si la caché se creó correctamente"""
         try:
             cache = caching.CachedContent.get(cache_id)
-            if cache and cache.state.name == "ACTIVE":
+            if cache and cache.expire_time > datetime.now():
                 print(f"Cache verified successfully: {cache_id}")
-                print(f"Token count: {cache.usage_metadata.get('total_token_count', 'unknown')}")
+                print(f"Token count: {cache.usage_metadata.total_token_count}")
+                print(f"Expires at: {cache.expire_time}")
                 return True
         except Exception as e:
             print(f"Cache verification failed: {e}")
         return False
 
     def _create_cache(self, content: str, prompt_key: str, cache_type: str) -> Optional[CacheMetadata]:
-        """Crea una nueva caché con verificación"""
         token_count = self._count_tokens(content)
         print(f"Estimated token count for {cache_type}: {token_count}")
         
@@ -90,49 +106,49 @@ class PromptCacheManager:
                 ttl=timedelta(hours=5)
             )
 
-            if self._verify_cache_creation(cache.name):
-                metadata = CacheMetadata(
-                    cache_id=cache.name,
-                    created_at=datetime.now(),
-                    token_count=token_count
-                )
+            if cache and cache.usage_metadata.total_token_count > 0:
+                cache_info = {
+                    "cache_id": cache.name,
+                    "created_at": datetime.now().isoformat(),
+                    "token_count": cache.usage_metadata.total_token_count,
+                    "duration": 5,
+                    "display_name": display_name
+                }
                 
-                # Guardar metadata
-                self.cache_storage.save_cache_metadata(
+                self.cache_registry.save_cache_info(
                     prompt_key=prompt_key,
                     cache_type=cache_type,
-                    metadata={
-                        "cache_id": cache.name,
-                        "created_at": metadata.created_at.isoformat(),
-                        "token_count": token_count,
-                        "duration_hours": metadata.duration_hours
-                    }
+                    cache_info=cache_info
                 )
                 
-                return metadata
+                print(f"Cache created and registered: {cache.name}")
+                print(f"Token count: {cache_info['token_count']}")
+                return CacheMetadata(
+                    cache_id=cache.name,
+                    created_at=datetime.now(),
+                    token_count=cache_info['token_count']
+                )
             
         except Exception as e:
             print(f"Cache creation error: {e}")
         return None
 
     def get_or_create_cache(self, prompt_data: Dict[str, Any], cache_type: str, prompt_key: str) -> Optional[str]:
-        """Obtiene o crea caché para un tipo específico de contenido"""
-        content = prompt_data.get(cache_type)
-        if not content:
-            return None
-
-        # Verificar caché existente
-        stored_metadata = self.cache_storage.get_cache_metadata(prompt_key, cache_type)
-        if stored_metadata:
+        # Verificar caché existente en el registro
+        if self.cache_registry.is_cache_valid(prompt_key, cache_type):
+            cache_info = self.cache_registry.get_cache_info(prompt_key, cache_type)
             try:
-                existing_cache = caching.CachedContent.get(stored_metadata['cache_id'])
-                if existing_cache and datetime.now() < datetime.fromisoformat(stored_metadata['created_at']) + timedelta(hours=stored_metadata['duration_hours']):
-                    if self._verify_cache_creation(existing_cache.name):
-                        print(f"Using existing cache for {cache_type}: {existing_cache.name}")
-                        return existing_cache.name
+                cache = caching.CachedContent.get(cache_info['cache_id'])
+                print(f"Using existing cache: {cache_info['display_name']}")
+                print(f"Token count: {cache_info['token_count']}")
+                return cache_info['cache_id']
             except Exception as e:
-                print(f"Error checking existing cache: {e}")
+                print(f"Error accessing existing cache: {e}")
 
-        # Crear nueva caché
-        new_cache = self._create_cache(content, prompt_key, cache_type)
-        return new_cache.cache_id if new_cache else None
+        # Crear nueva caché si es necesario
+        content = prompt_data.get(cache_type)
+        if content:
+            new_cache = self._create_cache(content, prompt_key, cache_type)
+            return new_cache.cache_id if new_cache else None
+
+        return None

@@ -123,15 +123,26 @@ class GeminiInteract:
                 )
                 
                 if assistant_cache_id:
-                    print("Using cached assistant content...")
-                    initial_history = [
-                        {
-                            "role": "model",
-                            "parts": [str(self.__prompt_config['assistant'])]
-                        }
-                    ]
+                    try:
+                        cache = caching.CachedContent.get(assistant_cache_id)
+                        print(f"Using cached assistant content (Token count: {cache.usage_metadata.total_token_count})")
+                        # Siempre usar el contenido original para el historial
+                        initial_history = [
+                            {
+                                "role": "model",
+                                "parts": [str(self.__prompt_config['assistant'])]
+                            }
+                        ]
+                    except Exception as e:
+                        print(f"Error accessing assistant cache: {e}")
+                        initial_history = [
+                            {
+                                "role": "model",
+                                "parts": [str(self.__prompt_config['assistant'])]
+                            }
+                        ]
                 else:
-                    print("Using standard assistant content...")
+                    print("Using standard assistant content")
                     initial_history = [
                         {
                             "role": "model",
@@ -139,8 +150,8 @@ class GeminiInteract:
                         }
                     ]
 
-            self.chat_session = model.start_chat(history=initial_history)
-            print("Chat session initialized successfully")
+                self.chat_session = model.start_chat(history=initial_history)
+                print("Chat session initialized successfully")
 
     def process_media_files(self, media_paths):
         """Procesa y carga archivos multimedia"""
@@ -208,7 +219,7 @@ class GeminiInteract:
 
 
 if __name__ == "__main__":
-    gemini = GeminiInteract(prompt_key='query_translation_spanish_to_tsafiqui')
+    gemini = GeminiInteract(prompt_key='query_no_translation_spanish_with_tsafiqui_terms')
     
     # Ejemplo con mezcla de videos e imágenes
     response = gemini.send_message_with_media(
@@ -216,7 +227,7 @@ if __name__ == "__main__":
         media_paths=[
             r"C:\Users\Jeremy\Videos\Grabación 2024-09-23 201954.mp4",
             r"C:\Users\Jeremy\Pictures\Screenshots\Captura de pantalla 2024-07-12 200220.png",
-            r"C:\Users\Jeremy\Videos\Captures\Alien_ Isolation 2024-10-20 21-54-46.mp4"
+            #r"C:\Users\Jeremy\Videos\Captures\Alien_ Isolation 2024-10-20 21-54-46.mp4"
         ]
     )
     print(response.text)
