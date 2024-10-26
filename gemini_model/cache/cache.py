@@ -10,7 +10,7 @@ from google.generativeai import caching
 class CacheMetadata:
     cache_id: Optional[str] = None
     created_at: Optional[datetime] = None
-    duration_hours: int = 5
+    duration_hours: int = 1
     token_count: Optional[int] = None
 
 class CacheRegistry:
@@ -111,7 +111,7 @@ class PromptCacheManager:
                     "cache_id": cache.name,
                     "created_at": datetime.now().isoformat(),
                     "token_count": cache.usage_metadata.total_token_count,
-                    "duration": 5,
+                    "duration": 1,
                     "display_name": display_name
                 }
                 
