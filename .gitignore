@@ -4,5 +4,7 @@
 /intelemi_translator_venv
 */.gradio
 */__pycache__
-\gemini_model\cache\cache_registry.json
+*\gemini_model\cache\cache_registry.json
 *chat_history.json
+*/history/__pycache__
+*.json
