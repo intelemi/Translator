@@ -1,5 +1,8 @@
 *.env
 /__pycache__
 /intelemi_translator_env
+/intelemi_translator_venv
 */.gradio
 */__pycache__
+\gemini_model\cache\cache_registry.json
+*chat_history.json

@@ -1,13 +1,14 @@
 import os
 import time
-from prompts import prompts
+from data.prompts import prompts
 from dotenv import load_dotenv
 import google.generativeai as genai
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from google.generativeai import caching
-from cache import CacheMetadata,PromptCacheManager
+from cache.cache import CacheMetadata,PromptCacheManager
+from history.history import ChatHistory
 
 
 load_dotenv()
@@ -69,7 +70,10 @@ class GeminiInteract:
     def __init__(self, prompt_key='query_no_translation_tsafiqui', 
                  temperature=0.3, top_p=0.95, 
                  top_k=40, 
-                 max_output_tokens=8192):
+                 max_output_tokens=8192,
+                 max_history_messages=10,
+                 history_file="chat_history.json"):
+        
         self.__model = MODEL_NAME
         self.__prompt_key = prompt_key 
         self.__prompt_config = prompts[prompt_key]  # Acceso directo al diccionario de prompts
@@ -84,6 +88,10 @@ class GeminiInteract:
         self.media_handler = MediaHandler()
         self.uploaded_files = []
         self.cache_manager = PromptCacheManager(MODEL_NAME)
+        self.chat_history = ChatHistory(
+            max_messages=max_history_messages,
+            history_file=history_file
+        )
         
     def _initialize_model_with_cache(self):
         """Inicializa el modelo con caché del system prompt"""
@@ -115,9 +123,9 @@ class GeminiInteract:
             print("\nInitializing chat session...")
             model = self._initialize_model_with_cache()
 
-            initial_history = []
+            # Primero manejar las cachés
+            assistant_cache_id = None
             if self.__prompt_config.get('assistant'):
-                # Intentar obtener caché del assistant
                 assistant_cache_id = self.cache_manager.get_or_create_cache(
                     self.__prompt_config, 'assistant', self.__prompt_key
                 )
@@ -126,32 +134,18 @@ class GeminiInteract:
                     try:
                         cache = caching.CachedContent.get(assistant_cache_id)
                         print(f"Using cached assistant content (Token count: {cache.usage_metadata.total_token_count})")
-                        # Siempre usar el contenido original para el historial
-                        initial_history = [
-                            {
-                                "role": "model",
-                                "parts": [str(self.__prompt_config['assistant'])]
-                            }
-                        ]
                     except Exception as e:
                         print(f"Error accessing assistant cache: {e}")
-                        initial_history = [
-                            {
-                                "role": "model",
-                                "parts": [str(self.__prompt_config['assistant'])]
-                            }
-                        ]
-                else:
-                    print("Using standard assistant content")
-                    initial_history = [
-                        {
-                            "role": "model",
-                            "parts": [str(self.__prompt_config['assistant'])]
-                        }
-                    ]
 
-                self.chat_session = model.start_chat(history=initial_history)
-                print("Chat session initialized successfully")
+            # Obtener el historial formateado incluyendo los prompts actuales
+            formatted_history = self.chat_history.get_formatted_history(
+                system_prompt=self.__prompt_config.get('system'),
+                assistant_prompt=self.__prompt_config.get('assistant')
+            )
+
+            # Iniciar sesión con el historial completo
+            self.chat_session = model.start_chat(history=formatted_history)
+            print("Chat session initialized successfully")
 
     def process_media_files(self, media_paths):
         """Procesa y carga archivos multimedia"""
@@ -190,19 +184,26 @@ class GeminiInteract:
         try:
             message_parts = []
             
-            # Procesar archivos multimedia si existen
             if media_paths:
                 files = self.process_media_files(media_paths)
                 message_parts.extend(files)
             
-            # Agregar el texto del mensaje
             message_parts.append(message)
             
-            # Enviar el mensaje con todas las partes
+            # Agregar mensaje del usuario al historial
+            self.chat_history.add_message("user", message_parts)
+            
+            # Enviar el mensaje
             response = self.chat_session.send_message(message_parts)
+            
+            # Agregar respuesta al historial
+            self.chat_history.add_message("model", response.text)
+            
             return response
         except Exception as e:
-            return f"Error: {str(e)}"
+            error_msg = f"Error: {str(e)}"
+            print(error_msg)
+            return error_msg
 
     def clear_uploaded_files(self):
         """Limpia el registro de archivos subidos"""
@@ -211,23 +212,67 @@ class GeminiInteract:
     def send_single_message(self, message):
         self.start_chat() 
         try:
+            # Agregar mensaje del usuario al historial
+            self.chat_history.add_message("user", message)
+            
+            # Enviar mensaje
             response = self.chat_session.send_message(message)
+            
+            # Agregar respuesta al historial
+            self.chat_history.add_message("model", response.text)
+            
             return response
         except Exception as e:
             return f"Error: {str(e)}"
         
+        
+    def clear_chat(self):
+        """Limpia el historial y reinicia la sesión"""
+        self.chat_history.clear_history()
+        self.chat_session = None
+        self.clear_uploaded_files()
+        
 
 
 if __name__ == "__main__":
-    gemini = GeminiInteract(prompt_key='query_no_translation_spanish_with_tsafiqui_terms')
+    gemini = GeminiInteract(
+        prompt_key='query_no_translation_spanish_with_tsafiqui_terms',
+        max_history_messages=10
+    )
     
-    # Ejemplo con mezcla de videos e imágenes
+    # Primer mensaje con multimedia
+    print("\n=== Primera interacción (con multimedia) ===")
     response = gemini.send_message_with_media(
-        message="Analiza estos archivos multimedia y haz la transcripcion a tsafiqui",
+        message="ahora analiza estos archivos multimedia y haz la transcripcion a tsafiqui",
         media_paths=[
-            r"C:\Users\Jeremy\Videos\Grabación 2024-09-23 201954.mp4",
-            r"C:\Users\Jeremy\Pictures\Screenshots\Captura de pantalla 2024-07-12 200220.png",
-            #r"C:\Users\Jeremy\Videos\Captures\Alien_ Isolation 2024-10-20 21-54-46.mp4"
+            r"C:\Users\JeremyCollaguazo\Videos\Grabaciones de pantalla\Grabación de pantalla 2024-08-12 092424.mp4",
+            r"C:\Users\JeremyCollaguazo\Pictures\Screenshots\Captura de pantalla 2023-12-29 113600.png"
         ]
     )
-    print(response.text)
+    print("Respuesta:", response.text)
+
+    # Mensaje de seguimiento (solo texto)
+    print("\n=== Segunda interacción (solo texto) ===")
+    response = gemini.send_single_message(
+        "Basándote en la transcripción anterior, ¿podrías explicar más sobre el significado en tsafiqui?"
+    )
+    print("Respuesta:", response.text)
+
+    # Otro mensaje de texto
+    print("\n=== Tercera interacción (solo texto) ===")
+    response = gemini.send_single_message(
+        "¿Cómo se pronuncia correctamente esa frase en tsafiqui?"
+    )
+    print("Respuesta:", response.text)
+
+    # Ver historial actual
+    print("\n=== Historial de la conversación ===")
+    for msg in gemini.chat_history.messages:
+        role = "Usuario" if msg['role'] == "user" else "Asistente"
+        content = msg['parts'][0] if isinstance(msg['parts'][0], str) else "[Contenido multimedia]"
+        timestamp = datetime.fromisoformat(msg['timestamp']).strftime("%Y-%m-%d %H:%M:%S")
+        print(f"\n{timestamp} - {role}:")
+        print(content)
+
+    # Opcional: Guardar o limpiar historial
+    # gemini.clear_chat()
