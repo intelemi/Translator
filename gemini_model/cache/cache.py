@@ -8,18 +8,41 @@ from google.generativeai import caching
 
 @dataclass
 class CacheMetadata:
+    """Clase para almacenar metadatos sobre el caché.
+    
+    Attributes:
+        cache_id (Optional[str]): Identificador del caché.
+        created_at (Optional[datetime]): Fecha y hora de creación del caché.
+        duration_hours (int): Duración en horas que el caché es válido.
+        token_count (Optional[int]): Número de tokens almacenados en el caché.
+    """
     cache_id: Optional[str] = None
     created_at: Optional[datetime] = None
     duration_hours: int = 1
     token_count: Optional[int] = None
 
 class CacheRegistry:
-    """Maneja el registro persistente de cachés"""
+    """Clase para manejar el registro persistente de cachés.
+    
+    Attributes:
+        registry_path (Path): Ruta al archivo JSON donde se almacena el registro de cachés.
+        registry (dict): Diccionario que contiene el registro de los cachés almacenados.
+    """
     def __init__(self, registry_path="./gemini_model/cache/cache_registry.json"):
+        """Inicializa CacheRegistry cargando el registro de caché desde el archivo JSON.
+
+        Args:
+            registry_path (str): Ruta al archivo de registro de cachés.
+        """
         self.registry_path = Path(registry_path)
         self.registry = self._load_registry()
 
     def _load_registry(self) -> dict:
+        """Carga el registro de cachés desde el archivo JSON.
+
+        Returns:
+            dict: Diccionario con el contenido del registro, o vacío si hay un error.
+        """
         if self.registry_path.exists():
             try:
                 with open(self.registry_path, 'r') as f:
@@ -30,6 +53,13 @@ class CacheRegistry:
         return {}
 
     def save_cache_info(self, prompt_key: str, cache_type: str, cache_info: dict):
+        """Guarda la información de un caché en el registro.
+
+        Args:
+            prompt_key (str): Clave que identifica el prompt.
+            cache_type (str): Tipo de caché.
+            cache_info (dict): Información del caché a almacenar.
+        """
         if prompt_key not in self.registry:
             self.registry[prompt_key] = {}
         
@@ -43,9 +73,27 @@ class CacheRegistry:
             print(f"Error saving cache registry: {e}")
 
     def get_cache_info(self, prompt_key: str, cache_type: str) -> Optional[dict]:
+        """Obtiene la información de un caché específico.
+
+        Args:
+            prompt_key (str): Clave del prompt.
+            cache_type (str): Tipo de caché.
+
+        Returns:
+            Optional[dict]: Información del caché o None si no existe.
+        """
         return self.registry.get(prompt_key, {}).get(cache_type)
 
     def is_cache_valid(self, prompt_key: str, cache_type: str) -> bool:
+        """Verifica si el caché es válido, basándose en su tiempo de creación y duración.
+
+        Args:
+            prompt_key (str): Clave del prompt.
+            cache_type (str): Tipo de caché.
+
+        Returns:
+            bool: True si el caché es válido, False en caso contrario.
+        """
         cache_info = self.get_cache_info(prompt_key, cache_type)
         if not cache_info:
             return False
@@ -58,13 +106,32 @@ class CacheRegistry:
             return False
 
 class PromptCacheManager:
+    """Clase para gestionar la creación y obtención de cachés para prompts.
+    
+    Attributes:
+        model_name (str): Nombre del modelo usado para la creación del caché.
+        _cache_threshold (int): Límite de tokens para crear un caché.
+        cache_registry (CacheRegistry): Instancia de CacheRegistry para gestionar el registro de cachés.
+    """
     def __init__(self, model_name: str):
+        """Inicializa el gestor de cachés con el nombre del modelo y el registro de cachés.
+
+        Args:
+            model_name (str): Nombre del modelo a utilizar.
+        """
         self.model_name = model_name
         self._cache_threshold = 32768
         self.cache_registry = CacheRegistry()
 
     def _count_tokens(self, content: str) -> int:
-        """Estima el conteo de tokens en el contenido"""
+        """Calcula una estimación del número de tokens en el contenido.
+
+        Args:
+            content (str): Contenido para el cual contar los tokens.
+
+        Returns:
+            int: Número estimado de tokens en el contenido.
+        """
         try:
             # Si el contenido es un diccionario o lista, convertirlo a string
             if isinstance(content, (dict, list)):
@@ -76,6 +143,14 @@ class PromptCacheManager:
             return 0
 
     def _verify_cache_creation(self, cache_id: str) -> bool:
+        """Verifica si un caché existe y es válido.
+
+        Args:
+            cache_id (str): Identificador del caché a verificar.
+
+        Returns:
+            bool: True si el caché es válido, False en caso contrario.
+        """
         try:
             cache = caching.CachedContent.get(cache_id)
             if cache and cache.expire_time > datetime.now():
@@ -88,6 +163,16 @@ class PromptCacheManager:
         return False
 
     def _create_cache(self, content: str, prompt_key: str, cache_type: str) -> Optional[CacheMetadata]:
+        """Crea un caché para el contenido si cumple con los requisitos.
+
+        Args:
+            content (str): Contenido a almacenar en el caché.
+            prompt_key (str): Clave del prompt para identificar el caché.
+            cache_type (str): Tipo de caché.
+
+        Returns:
+            Optional[CacheMetadata]: Metadatos del caché si se creó exitosamente, None si no.
+        """
         token_count = self._count_tokens(content)
         print(f"Estimated token count for {cache_type}: {token_count}")
         
@@ -134,7 +219,16 @@ class PromptCacheManager:
         return None
 
     def get_or_create_cache(self, prompt_data: Dict[str, Any], cache_type: str, prompt_key: str) -> Optional[str]:
-        # Verificar caché existente en el registro
+        """Obtiene o crea un caché para el contenido del prompt.
+
+        Args:
+            prompt_data (Dict[str, Any]): Datos del prompt que incluye el contenido.
+            cache_type (str): Tipo de caché.
+            prompt_key (str): Clave para identificar el prompt.
+
+        Returns:
+            Optional[str]: Identificador del caché si existe o se crea exitosamente.
+        """
         if self.cache_registry.is_cache_valid(prompt_key, cache_type):
             cache_info = self.cache_registry.get_cache_info(prompt_key, cache_type)
             try:

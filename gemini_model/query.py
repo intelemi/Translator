@@ -1,7 +1,7 @@
 import os
 import google.generativeai as genai
 from dotenv import load_dotenv
-from prompts import prompts
+from data.prompts import prompts
 
 PROMPTS=prompts
 
@@ -12,9 +12,17 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 MODEL_NAME = os.getenv("MODEL_NAME")
 
 class PromptFormatter:
+    """Clase auxiliar para formatear prompts en el formato requerido por el clasificador."""
     @staticmethod
     def format_prompts_for_classifier(prompts_dict):
-        """Formatea los prompts disponibles en el formato requerido para el clasificador"""
+        """Formatea los prompts disponibles en el formato requerido para el clasificador.
+        
+        Args:
+            prompts_dict (dict): Diccionario con los nombres y descripciones de los prompts.
+        
+        Returns:
+            str: Los prompts formateados en un solo string, cada uno en una línea.
+        """
         formatted_prompts = []
         for prompt_name, prompt_data in prompts_dict.items():
             formatted_prompts.append(
@@ -23,6 +31,7 @@ class PromptFormatter:
         return "\n\n".join(formatted_prompts)
 
 class QueryClassifier:
+    """Clase para clasificar consultas utilizando el modelo generativo configurado en Gemini."""
     def __init__(self, prompts_dict):
         self.__api_key = GEMINI_API_KEY
         genai.configure(api_key=self.__api_key)
@@ -46,7 +55,14 @@ class QueryClassifier:
         self.chat_session = None
 
     def __create_system_instruction(self, prompts_dict):
-        """Crea el system instruction dinámicamente basado en los prompts disponibles"""
+        """Crea el system instruction dinámicamente basado en los prompts disponibles.
+        
+        Args:
+            prompts_dict (dict): Diccionario con los prompts a incluir en las instrucciones.
+        
+        Returns:
+            str: Instrucción formateada que enumera los prompts disponibles para el modelo.
+        """
         formatted_prompts = PromptFormatter.format_prompts_for_classifier(prompts_dict)
         
         return f"""Eres un clasificador experto de consultas. Tu tarea es analizar la consulta del usuario y determinar cuál de los siguientes casos corresponde exactamente:
@@ -58,7 +74,14 @@ Analiza la siguiente consulta y responde ÚNICAMENTE con el nombre exacto del ca
 Query del usuario:"""
 
     def start_chat(self, initial_query=None):
-        """Inicia una nueva sesión de chat con una query inicial opcional"""
+        """Inicia una nueva sesión de chat con una query inicial opcional.
+        
+        Args:
+            initial_query (str, optional): Consulta inicial para el modelo.
+        
+        Esta función crea una nueva sesión de chat usando la consulta inicial,
+        si se proporciona, o de lo contrario, una sesión en blanco.
+        """
         if initial_query:
             history = [
                 {
@@ -71,7 +94,18 @@ Query del usuario:"""
             self.chat_session = self.__model.start_chat()
 
     def classify_query(self, query, new_session=False):
-        """Clasifica una query y retorna el tipo de prompt correspondiente"""
+        """Clasifica una query y retorna el tipo de prompt correspondiente.
+        
+        Args:
+            query (str): Consulta del usuario que se clasificará.
+            new_session (bool): Si es True, inicia una nueva sesión de chat.
+        
+        Returns:
+            str: Nombre exacto del prompt clasificado para la consulta.
+        
+        La función envía la query al modelo y obtiene una respuesta clasificando
+        la consulta en uno de los prompts definidos.
+        """
         if new_session or not self.chat_session:
             self.start_chat()
         
