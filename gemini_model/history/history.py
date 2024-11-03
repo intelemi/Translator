@@ -24,19 +24,23 @@ class ChatHistory:
         self.max_messages = max_messages
         self.messages = deque(maxlen=max_messages)
         self.history_file = Path(history_file)
+        self.media_references = {}  # Almacena {timestamp: [media_files]}
         self.load_history()
 
     def save_history(self):
-        """Guarda solo los mensajes de texto en el historial"""
+        """Guarda el historial y referencias multimedia"""
         history_data = {
             "last_updated": datetime.now().isoformat(),
             "max_messages": self.max_messages,
-            "messages": [
-                msg for msg in list(self.messages)
-                if not any(isinstance(part, dict) and part.get('type') == 'media' 
-                          for part in msg['parts'])
-            ]
+            "messages": list(self.messages),
+            "media_references": self.media_references
         }
+        
+        try:
+            with open(self.history_file, 'w', encoding='utf-8') as f:
+                json.dump(history_data, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            print(f"Error saving history: {e}")
         
         try:
             with open(self.history_file, 'w', encoding='utf-8') as f:
@@ -59,13 +63,15 @@ class ChatHistory:
             try:
                 with open(self.history_file, 'r', encoding='utf-8') as f:
                     history_data = json.load(f)
-                    messages = history_data.get('messages', [])
-                    self.messages = deque(messages, maxlen=self.max_messages)
-                print(f"Conversation history loaded from {self.history_file}")
+                    self.messages = deque(history_data.get('messages', []), 
+                                       maxlen=self.max_messages)
+                    self.media_references = history_data.get('media_references', {})
+                print(f"History loaded from {self.history_file}")
             except Exception as e:
                 print(f"Error loading history: {e}")
                 self.messages = deque(maxlen=self.max_messages)
-
+                self.media_references = {}
+        
     def get_formatted_history(self, system_prompt: dict, assistant_prompt: dict) -> List[Dict[str, Any]]:
         """Retorna el historial de mensajes en el formato adecuado para una API (por ejemplo, Gemini).
 
@@ -96,11 +102,10 @@ class ChatHistory:
                 "parts": [str(assistant_prompt)]
             })
         
-        # Agregar solo mensajes de texto del historial
+        # Solo incluir mensajes de texto (sin multimedia)
         for message in self.messages:
-            # Filtrar mensajes que no contengan multimedia
-            if not any(isinstance(part, dict) and part.get('type') == 'media' 
-                      for part in message['parts']):
+            if not any(isinstance(part, str) and part.startswith('[Media file:') 
+                    for part in message['parts']):
                 history.append({
                     "role": message["role"],
                     "parts": message["parts"]
@@ -119,25 +124,40 @@ class ChatHistory:
             role (str): Rol del emisor del mensaje, por ejemplo 'user' o 'assistant'.
             content (Any): Contenido del mensaje, que puede ser texto o una lista de partes.
         """
+        timestamp = datetime.now().isoformat()
+        
         if isinstance(content, list):
-            # Para mensajes con multimedia, guardar una versión de texto
+            # Separar multimedia y texto
+            media_files = []
             text_parts = []
+            
             for item in content:
                 if hasattr(item, 'uri'):
-                    text_parts.append(f"[Media file: {getattr(item, 'mime_type', 'unknown')}]")
+                    media_files.append({
+                        'uri': item.uri,
+                        'mime_type': getattr(item, 'mime_type', 'unknown'),
+                        'name': item.name
+                    })
+                    text_parts.append(f"[Media file: {item.mime_type}]")
                 else:
                     text_parts.append(str(item))
+            
+            # Guardar referencias a multimedia
+            if media_files:
+                self.media_references[timestamp] = media_files
             
             message = {
                 "role": role,
                 "parts": text_parts,
-                "timestamp": datetime.now().isoformat()
+                "timestamp": timestamp,
+                "has_media": bool(media_files)
             }
         else:
             message = {
                 "role": role,
                 "parts": [str(content)],
-                "timestamp": datetime.now().isoformat()
+                "timestamp": timestamp,
+                "has_media": False
             }
         
         self.messages.append(message)
