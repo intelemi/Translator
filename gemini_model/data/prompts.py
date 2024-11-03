@@ -1,4 +1,4 @@
-from tsafiqui_dic import tsafiqui_dic
+from .tsafiqui_dic import tsafiqui_dic
 
 
 prompts = {
@@ -8,13 +8,13 @@ prompts = {
         "system_cache": {
             "cache_id": None,
             "created_at": None,
-            "duration": 5
+            "duration": 1
         },
         "assistant": tsafiqui_dic,
         "assistant_cache": {
             "cache_id": None,
             "created_at": None,
-            "duration": 5
+            "duration": 1
         }
     },
     "query_no_translation_spanish_with_tsafiqui_terms": {
@@ -23,13 +23,13 @@ prompts = {
         "system_cache": {
             "cache_id": None,
             "created_at": None,
-            "duration": 5
+            "duration": 1
         },
         "assistant": tsafiqui_dic,
         "assistant_cache": {
             "cache_id": None,
             "created_at": None,
-            "duration": 5
+            "duration": 1
         }
     },
     "query_translation_tsafiqui_to_spanish": {
@@ -38,13 +38,13 @@ prompts = {
         "system_cache": {
             "cache_id": None,
             "created_at": None,
-            "duration": 5
+            "duration": 1
         },
         "assistant": tsafiqui_dic,
         "assistant_cache": {
             "cache_id": None,
             "created_at": None,
-            "duration": 5
+            "duration": 1
         }
     },
     "query_translation_spanish_to_tsafiqui": {
@@ -53,13 +53,13 @@ prompts = {
         "system_cache": {
             "cache_id": None,
             "created_at": None,
-            "duration": 5
+            "duration": 1
         },
         "assistant": tsafiqui_dic,
         "assistant_cache": {
             "cache_id": None,
             "created_at": None,
-            "duration": 5
+            "duration": 1
         }
     }
 }
