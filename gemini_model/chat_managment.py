@@ -1,8 +1,7 @@
-from model import GeminiInteract, MediaHandler
+from model import GeminiInteract
 from query import QueryClassifier
 from data.prompts import prompts
-from typing import List, Dict, Optional, Union
-import time
+from typing import List, Optional
 from dataclasses import dataclass
 
 @dataclass
@@ -24,10 +23,10 @@ class GeminiChatManager:
                        media_paths: Optional[List[str]] = None) -> ChatResponse:
         """Procesa una solicitud completa del usuario"""
         try:
-            # 1. Clasificar la solicitud
+            # 1. Clasificar la solicitud para obtener el prompt adecuado
             prompt_key = self.classifier.classify_query(text_message, new_session=True)
             
-            # 2. Inicializar o actualizar modelo con el prompt correcto
+            # 2. Inicializar o actualizar modelo con el prompt clasificado
             self.model = GeminiInteract(
                 prompt_key=prompt_key,
                 temperature=self.temperature,
@@ -35,15 +34,15 @@ class GeminiChatManager:
             )
             
             # 3. Procesar la solicitud
-            response = (
-                self.model.send_message_with_media(message=text_message, media_paths=media_paths)
-                if media_paths else
-                self.model.send_single_message(text_message)
-            )
+            if media_paths:
+                response = self.model.send_message_with_media(message=text_message, media_paths=media_paths)
+            else:
+                response = self.model.send_single_message(text_message)
 
+            # 4. Retornar la respuesta
             return ChatResponse(
                 status='success',
-                response=response.text,
+                response=response.text if hasattr(response, 'text') else response,
                 prompt_used=prompt_key
             )
 
@@ -61,10 +60,20 @@ class GeminiChatManager:
     def clear_chat(self):
         """Limpia el historial y reinicia el modelo"""
         if self.model:
-            self.model.clear_chat_history()
+            self.model.clear_chat()
             self.model = None
     
 if __name__ == "__main__":
+    media_paths = [
+        r"C:\Users\Jeremy\Videos\Grabación 2024-09-23 201954.mp4",
+        r"C:\Users\Jeremy\Pictures\Screenshots\Captura de pantalla 2024-09-04 233907.png"
+    ]
+    photos = [
+        r"C:\Users\Jeremy\Pictures\Screenshots\Captura de pantalla 2024-09-04 233907.png"
+    ]
+    videos=[
+         r"C:\Users\Jeremy\Videos\Grabación 2024-09-23 201954.mp4"
+    ]
     chat_manager = GeminiChatManager(max_history_messages=10)
 
     # Ejemplo de conversación
@@ -79,7 +88,7 @@ if __name__ == "__main__":
     # Mensaje con multimedia
     response = chat_manager.process_request(
         text_message="Analiza estas imágenes",
-        media_paths=["imagen1.png", "video1.mp4"]
+        media_paths=[r"C:\Users\Jeremy\Pictures\Screenshots\Captura de pantalla 2024-09-04 233907.png", r"C:\Users\Jeremy\Videos\Grabación 2024-09-23 201954.mp4"]
     )
     responses.append(response)
 
