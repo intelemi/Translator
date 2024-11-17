@@ -1,43 +1,61 @@
-import gradio as gr
-from gemini_model.model import GeminiInteract
+from flask import Flask, request, jsonify
+from gemini_model.chat_managment import GeminiChatManager
 
-# Definir una instancia de GeminiInteract
-gemini = GeminiInteract(prompt_key='profesional')
+# Crear instancia de Flask
+app = Flask(__name__)
 
-# Función para Gradio que interactúa con Gemini
-def chat_with_gemini(message, history):
-    response = gemini.send_single_message(message)
-    history.append((message, response.text))
-    return "", history
+# Crear instancia del chat manager
+gemini_chat_manager = GeminiChatManager(max_history_messages=10)
 
-# Configurar el tema personalizado
-theme = gr.themes.Default().set(
-    body_background_fill="#f7f7f8",
-    block_background_fill="#ffffff",
-    block_border_width="0px",
-    button_primary_background_fill="#10a37f",
-    button_primary_text_color="#ffffff",
-)
+# Endpoint para enviar un mensaje de texto normal
+@app.route('/send_message', methods=['POST'])
+def send_message():
+    try:
+        data = request.get_json()
+        text_message = data.get('text_message')
+        if not text_message:
+            return jsonify({'status': 'error', 'message': 'No se proporcionó un mensaje de texto'}), 400
 
-# Configurar la interfaz de Gradio
-with gr.Blocks(theme=theme) as iface:
-    gr.Markdown("# Gemini Chatbot")
-    gr.Markdown("Interactúe con Gemini, un modelo de lenguaje avanzado.")
-    
-    chatbot = gr.Chatbot(height=400, show_label=False)
-    msg = gr.Textbox(
-        show_label=False,
-        placeholder="Escribe tu mensaje aquí...",
-        container=False
-    )
-    clear = gr.Button("Limpiar conversación")
+        response = gemini_chat_manager.process_request(text_message=text_message)
+        return jsonify({'status': response.status, 'response': response.response, 'prompt_used': response.prompt_used})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
-    def clear_conversation():
-        return None
+# Endpoint para enviar un mensaje con archivos multimedia
+@app.route('/send_message_with_media', methods=['POST'])
+def send_message_with_media():
+    try:
+        data = request.get_json()
+        text_message = data.get('text_message')
+        media_paths = data.get('media_paths', [])
+        if not text_message:
+            return jsonify({'status': 'error', 'message': 'No se proporcionó un mensaje de texto'}), 400
 
-    msg.submit(chat_with_gemini, [msg, chatbot], [msg, chatbot])
-    clear.click(clear_conversation, outputs=[chatbot])
+        response = gemini_chat_manager.process_request(text_message=text_message, media_paths=media_paths)
+        return jsonify({'status': response.status, 'response': response.response, 'prompt_used': response.prompt_used})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
-# Ejecutar la interfaz Gradio
-if __name__ == "__main__":
-    iface.launch()
+# Endpoint para obtener el historial de la conversación
+@app.route('/get_chat_history', methods=['GET'])
+def get_chat_history():
+    try:
+        history = gemini_chat_manager.get_chat_history()
+        if not history:
+            return jsonify({'status': 'error', 'message': 'No hay historial disponible'}), 404
+
+        formatted_history = []
+        for msg in history.messages:
+            formatted_message = {
+                'role': 'user' if msg['role'] == 'user' else 'assistant',
+                'content': msg['parts']
+            }
+            formatted_history.append(formatted_message)
+
+        return jsonify({'status': 'success', 'history': formatted_history})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+# Ejecutar la aplicación Flask
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=True)

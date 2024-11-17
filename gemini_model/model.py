@@ -9,6 +9,7 @@ from typing import Optional, Dict, Any
 from google.generativeai import caching
 from cache.cache import CacheMetadata,PromptCacheManager
 from history.history import ChatHistory
+from history.history_mongo import ChatHistoryMongo
 from media.media_handler import MediaHandler
 
 load_dotenv()
@@ -16,17 +17,21 @@ load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 MODEL_NAME = os.getenv("MODEL_NAME")
 
+MONGO_URI = os.getenv("MONGO_URI")
 
 genai.configure(api_key=GEMINI_API_KEY)
 
 
 class GeminiInteract:
-    def __init__(self, prompt_key='query_translation_spanish_to_tsafiqui', 
-                 temperature=0.1, top_p=0.95, 
-                 top_k=40, 
+    def __init__(self, prompt_key='query_translation_spanish_to_tsafiqui',
+                 temperature=0.1, top_p=0.95,
+                 top_k=40,
                  max_output_tokens=8192,
                  max_history_messages=10,
-                 history_file="./gemini_model/history/chat_history.json"):
+                 db_uri=MONGO_URI,
+                 db_name="Intelemi_translator",
+                 user_id=None,
+                 chat_room_id=None):
         
         self.__model = MODEL_NAME
         self.__prompt_key = prompt_key 
@@ -40,10 +45,13 @@ class GeminiInteract:
         }
         self.chat_session = None
         self.media_handler = MediaHandler()
-        self.cache_manager = PromptCacheManager(MODEL_NAME)
-        self.chat_history = ChatHistory(
-            max_messages=max_history_messages,
-            history_file=history_file
+        self.cache_manager = PromptCacheManager(self.__model)
+        self.chat_history = ChatHistoryMongo(
+            db_uri=db_uri,
+            db_name=db_name,
+            user_id=user_id,
+            chat_room_id=chat_room_id,
+            max_messages=max_history_messages
         )
         
     def _initialize_model_with_cache(self):
@@ -54,16 +62,16 @@ class GeminiInteract:
 
         if system_cache_id:
             try:
-                print("Initializing model with cached system prompt...")
+                print("| Initializing model with cached system prompt... \n")
                 system_cache = caching.CachedContent.get(system_cache_id)
                 return genai.GenerativeModel.from_cached_content(
                     cached_content=system_cache,
                     generation_config=self.__generation_config
                 )
             except Exception as e:
-                print(f"Cache initialization error: {e}")
+                print(f"| Cache initialization error: {e}\n")
 
-        print("Using standard model initialization...")
+        # print("Using standard model initialization...")
         return genai.GenerativeModel(
             model_name=self.__model,
             generation_config=self.__generation_config,
@@ -73,7 +81,7 @@ class GeminiInteract:
 
     def start_chat(self):
         if not self.chat_session:
-            print("\nInitializing chat session...")
+            # print("\nInitializing chat session...")
             model = self._initialize_model_with_cache()
 
             # Primero manejar las cachés
@@ -82,23 +90,28 @@ class GeminiInteract:
                 assistant_cache_id = self.cache_manager.get_or_create_cache(
                     self.__prompt_config, 'assistant', self.__prompt_key
                 )
-                
+
                 if assistant_cache_id:
                     try:
                         cache = caching.CachedContent.get(assistant_cache_id)
-                        print(f"Using cached assistant content (Token count: {cache.usage_metadata.total_token_count})")
+                        print(f"| Using cached assistant content (Token count: {cache.usage_metadata.total_token_count})\n")
                     except Exception as e:
-                        print(f"Error accessing assistant cache: {e}")
+                        print(f"| Error accessing assistant cache: {e} \n")
 
             # Obtener el historial formateado excluyendo mensajes con multimedia
             formatted_history = self.chat_history.get_formatted_history(
                 system_prompt=self.__prompt_config.get('system'),
                 assistant_prompt=self.__prompt_config.get('assistant')
             )
+            
+            # Imprimir la clave del prompt y un resumen del diccionario
+            print(f"| Prompt Key: {self.__prompt_key}")
+            # print(f"| System Prompt: {self.__prompt_config.get('system')}")
+            # print(f"| Assistant Prompt: {self.__prompt_config.get('assistant')}")
 
             # Iniciar sesión con el historial completo
             self.chat_session = model.start_chat(history=formatted_history)
-            print("Chat session initialized successfully")
+            print("| Chat session initialized successfully \n")
 
     def process_media_files(self, media_paths):
         """Procesa y carga archivos multimedia"""
@@ -118,7 +131,7 @@ class GeminiInteract:
     def send_message_with_media(self, message, media_paths=None):
         """Envía un mensaje que puede incluir archivos multimedia"""
         try:
-            print("\nInitializing chat session for multimedia message...")
+            # print("\nInitializing chat session for multimedia message...")
             model = self._initialize_model_with_cache()
 
             # Manejar cachés
@@ -141,7 +154,7 @@ class GeminiInteract:
                 files = self.process_media_files(media_paths)
                 if files:
                     message_parts.extend(files)
-                    print(f"Added {len(files)} media files to message")
+                    # print(f" Added {len(files)} media files to message")
             
             message_parts.append(message)
             
@@ -162,14 +175,14 @@ class GeminiInteract:
             self.chat_session = model.start_chat(history=initial_history)
             
             # Enviar mensaje
-            print("Sending message with media...")
+            # print("Sending message with media...")
             response = self.chat_session.send_message(message_parts)
             
             # Guardar en historial
             self.chat_history.add_message("user", message_parts)
             if hasattr(response, 'text'):
                 self.chat_history.add_message("model", response.text)
-                print("Message processed successfully")
+                # print("Message processed successfully")
             
             return response
         except Exception as e:
@@ -208,11 +221,16 @@ class GeminiInteract:
 
 
 if __name__ == "__main__":
+    user_id = "user_123"
+    chat_room_id = "room_456"
+    
     gemini = GeminiInteract(
         prompt_key='query_translation_spanish_to_tsafiqui',
-        max_history_messages=10
+        max_history_messages=10,
+        user_id=user_id,
+        chat_room_id=chat_room_id
     )
-    
+
     # Rutas de archivos para reutilizar
     media_paths = [
         r"C:\Users\Jeremy\Videos\Grabación 2024-09-23 201954.mp4",
@@ -234,19 +252,19 @@ if __name__ == "__main__":
     # print("Respuesta:", response.text)
 
     # Ejemplo 2: Reutilización de multimedia
-    print("\n=== Ejemplo 2: Reutilización de multimedia ===")
-    response = gemini.send_message_with_media(
-        message="describe este archivo con más detalle",
-        media_paths= videos  # Mismos archivos, debería usar caché
-    )
-    print("Respuesta:", response.text)
-
-    # # Ejemplo 3: Mensaje de texto simple
-    # print("\n=== Ejemplo 3: Mensaje simple ===")
-    # response = gemini.send_single_message(
-    #     "Que mas me puedes decir de eso? recuerda que debes traducirlo al tsafiqui"
+    # print("\n=== Ejemplo 2: Reutilización de multimedia ===")
+    # response = gemini.send_message_with_media(
+    #     message="describe este archivo con más detalle",
+    #     media_paths= videos  # Mismos archivos, debería usar caché
     # )
     # print("Respuesta:", response.text)
+
+    # Ejemplo 3: Mensaje de texto simple
+    print("\n=== Ejemplo 3: Mensaje simple ===")
+    response = gemini.send_single_message(
+        "De que hemos hablado?"
+    )
+    print("Respuesta:", response.text)
 
     # Mostrar historial con referencias multimedia
     # print("\n=== Historial de la conversación ===")

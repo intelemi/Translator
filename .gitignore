@@ -12,7 +12,5 @@
 *.json
 *.pyc
 */data/__pycache__/
-gemini_model/cache/cache_registry.json
-gemini_model/__pycache__/__init__.cpython-312.pyc
-gemini_model/__pycache__/model.cpython-312.pyc
-gemini_model/cache/__pycache__/cache.cpython-312.pyc
+/gemini_model/cache/cache_registry.json
+

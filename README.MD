@@ -1,6 +1,6 @@
 # Intelemi Translator
 
-## Install dependences 
+## Dependences 
 
 ### Create venv
 
