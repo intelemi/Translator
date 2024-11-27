@@ -13,4 +13,6 @@
 *.pyc
 */data/__pycache__/
 /gemini_model/cache/cache_registry.json
-
+/gemini_model/data/1_diccionario.txt
+/gemini_model/data/2_gramatica.txt
+/gemini_model/data/3_ejemplos.txt

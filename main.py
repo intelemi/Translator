@@ -105,7 +105,7 @@ def send_message_with_media():
         chat_room_id = chat_room_id or f"room_{uuid.uuid4().hex}"
 
         # Clasificar la consulta para determinar el prompt adecuado
-        prompt_key = gemini_chat_manager.classifier.classify_query(text_message, new_session=True)
+        prompt_key = gemini_chat_manager.classifier.classify_query(text_message, new_session=True, user=user_id, chat_room=chat_room_id)
 
         # Inicializar instancia de GeminiInteract con los parámetros adecuados
         gemini_interact = GeminiInteract(

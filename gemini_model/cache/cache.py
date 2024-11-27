@@ -233,11 +233,11 @@ class PromptCacheManager:
             cache_info = self.cache_registry.get_cache_info(prompt_key, cache_type)
             try:
                 cache = caching.CachedContent.get(cache_info['cache_id'])
-                print(f"Using existing cache: {cache_info['display_name']}")
-                print(f"Token count: {cache_info['token_count']}")
+                print(f"\n| Using existing cache: {cache_info['display_name']}")
+                print(f"|Token count: {cache_info['token_count']}")
                 return cache_info['cache_id']
             except Exception as e:
-                print(f"Error accessing existing cache: {e}")
+                print(f"| Error accessing existing cache: {e}")
 
         # Crear nueva caché si es necesario
         content = prompt_data.get(cache_type)
