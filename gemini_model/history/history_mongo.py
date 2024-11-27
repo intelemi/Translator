@@ -1,7 +1,7 @@
 from pymongo import MongoClient
 from datetime import datetime
 import google.generativeai as genai
-
+import uuid
 
 class ChatHistoryMongo:
     """
@@ -105,3 +105,37 @@ class ChatHistoryMongo:
         }
         self.chat_collection.update_one(query, update, upsert=True)
 
+    def create_new_user_and_chat(self):
+        """
+        Crea un nuevo usuario y una nueva sala de chat, generando IDs únicos.
+
+        Returns:
+            Tuple[str, str]: user_id y chat_room_id generados.
+        """
+        self.user_id = str(uuid.uuid4())
+        self.chat_room_id = str(uuid.uuid4())
+
+        # Inicializa el registro en la base de datos para el nuevo chat
+        self.chat_collection.insert_one({
+            "user_id": self.user_id,
+            "chat_room_id": self.chat_room_id,
+            "messages": []
+        })
+
+        return self.user_id, self.chat_room_id
+
+    def get_all_chat_rooms_for_user(self):
+        """
+        Obtiene todas las salas de chat asociadas al usuario.
+        """
+        if not self.user_id:
+            return []
+
+        chat_rooms = list(self.chat_collection.find(
+            {"user_id": self.user_id},
+            {"chat_room_id": 1, "_id": 0}
+        ))
+        print("Chat rooms encontrados:", chat_rooms)  # Debug
+        return [chat_room.get("chat_room_id") for chat_room in chat_rooms]
+
+    

@@ -1,6 +1,6 @@
-from model import GeminiInteract
-from query import QueryClassifier
-from data.prompts import prompts
+from gemini_model.model import GeminiInteract
+from gemini_model.query import QueryClassifier
+from gemini_model.data.prompts import prompts
 from typing import List, Optional
 from dataclasses import dataclass
 
