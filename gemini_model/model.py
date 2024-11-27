@@ -1,16 +1,15 @@
 import os
-import time
-from data.prompts import prompts
 from dotenv import load_dotenv
 import google.generativeai as genai
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from google.generativeai import caching
-from cache.cache import CacheMetadata,PromptCacheManager
-from history.history import ChatHistory
-from history.history_mongo import ChatHistoryMongo
-from media.media_handler import MediaHandler
+from gemini_model.data.prompts import prompts
+from gemini_model.cache.cache import CacheMetadata,PromptCacheManager
+from gemini_model.history.history import ChatHistory
+from gemini_model.history.history_mongo import ChatHistoryMongo
+from gemini_model.media.media_handler import MediaHandler
 
 load_dotenv()
 
@@ -221,8 +220,8 @@ class GeminiInteract:
 
 
 if __name__ == "__main__":
-    user_id = "user_123"
-    chat_room_id = "room_456"
+    user_id = "Jeremy test - v2"
+    chat_room_id = "debug - media"
     
     gemini = GeminiInteract(
         prompt_key='query_translation_spanish_to_tsafiqui',
@@ -244,12 +243,12 @@ if __name__ == "__main__":
     ]
     
     # Ejemplo 1: Primera carga de multimedia
-    # print("\n=== Ejemplo 1: Primera carga de multimedia ===")
-    # response = gemini.send_message_with_media(
-    #     message="Analiza estos archivos multimedia y haz la transcripcion a tsafiqui",
-    #     media_paths=media_paths
-    # )
-    # print("Respuesta:", response.text)
+    print("\n=== Ejemplo 1: Primera carga de multimedia ===")
+    response = gemini.send_message_with_media(
+        message="Analiza estos archivos multimedia y haz la transcripcion",
+        media_paths=media_paths
+    )
+    print("Respuesta:", response.text)
 
     # Ejemplo 2: Reutilización de multimedia
     # print("\n=== Ejemplo 2: Reutilización de multimedia ===")
@@ -260,11 +259,11 @@ if __name__ == "__main__":
     # print("Respuesta:", response.text)
 
     # Ejemplo 3: Mensaje de texto simple
-    print("\n=== Ejemplo 3: Mensaje simple ===")
-    response = gemini.send_single_message(
-        "De que hemos hablado?"
-    )
-    print("Respuesta:", response.text)
+    # print("\n=== Ejemplo 3: Mensaje simple ===")
+    # response = gemini.send_single_message(
+    #     "Como se dice hola es tsafiqui?"
+    # )
+    # print("Respuesta:", response.text)
 
     # Mostrar historial con referencias multimedia
     # print("\n=== Historial de la conversación ===")

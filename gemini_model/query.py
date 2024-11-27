@@ -1,7 +1,7 @@
 import os
 import google.generativeai as genai
 from dotenv import load_dotenv
-from data.prompts import prompts
+from gemini_model.data.prompts import prompts
 
 PROMPTS=prompts
 
